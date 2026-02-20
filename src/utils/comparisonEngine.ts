@@ -1,7 +1,9 @@
 import type {
   WindowsUpdateForBusinessConfiguration,
+  WindowsUpdateActiveHoursInstall,
   WindowsFeatureUpdateProfile,
   WindowsQualityUpdateProfile,
+  WindowsQualityUpdatePolicy,
   FieldComparisonResult,
   PolicyComparisonResult,
 } from '../types/graph';
@@ -21,12 +23,11 @@ export const GOLDEN_UPDATE_RING: Omit<WindowsUpdateForBusinessConfiguration, 'id
   allowWindows11Upgrade: true,
   featureUpdatesRollbackWindowInDays: 60,
   businessReadyUpdatesOnly: 'businessReadyOnly',
-  automaticUpdateMode: 'autoInstallAndRebootAtScheduledTime',
-  updateWeeks: 'everyWeek',
+  automaticUpdateMode: 'autoInstallAndRebootAtMaintenanceTime',
   installationSchedule: {
-    '@odata.type': 'microsoft.graph.windowsUpdateScheduledInstall',
-    scheduledInstallDay: 'everyday',
-    scheduledInstallTime: '19:00:00.0000000',
+    '@odata.type': '#microsoft.graph.windowsUpdateActiveHoursInstall',
+    activeHoursStart: '06:00:00',
+    activeHoursEnd: '18:00:00',
   },
   userPauseAccess: 'disabled',
   userWindowsUpdateScanAccess: 'enabled',
@@ -40,7 +41,7 @@ export const GOLDEN_UPDATE_RING: Omit<WindowsUpdateForBusinessConfiguration, 'id
 
 export const GOLDEN_FEATURE_UPDATE: Omit<WindowsFeatureUpdateProfile, 'id'> = {
   '@odata.type': '#microsoft.graph.windowsFeatureUpdateProfile',
-  displayName: 'default_winupdate',
+  displayName: 'default_aad_kunde_win-feature',
   description: 'No Description',
   featureUpdateVersion: 'Windows 11, version 25H2',
   installFeatureUpdatesOptional: false,
@@ -48,13 +49,36 @@ export const GOLDEN_FEATURE_UPDATE: Omit<WindowsFeatureUpdateProfile, 'id'> = {
 
 export const GOLDEN_EXPEDITE_POLICY: Omit<WindowsQualityUpdateProfile, 'id'> = {
   '@odata.type': '#microsoft.graph.windowsQualityUpdateProfile',
-  displayName: 'Expedite - 2026.02 B Security Update',
+  displayName: 'default_aad_kunde_win-expedite',
   description: 'Emergency hotpatch expedite',
   expeditedUpdateSettings: {
     '@odata.type': 'microsoft.graph.expeditedWindowsQualityUpdateSettings',
     qualityUpdateRelease: '02/10/2026 - 2026.02 B',
     daysUntilForcedReboot: 1,
   },
+};
+
+export const GOLDEN_QUALITY_UPDATE_POLICY: Omit<WindowsQualityUpdatePolicy, 'id'> = {
+  '@odata.type': '#microsoft.graph.windowsQualityUpdatePolicy',
+  displayName: 'default_aad_kunde_win-quality',
+  description: 'Standardized Windows Quality Update Policy via InTuneUp',
+  hotpatchEnabled: true,
+  approvalSettings: [
+    {
+      '@odata.type': 'microsoft.graph.windowsQualityUpdateApprovalSetting',
+      windowsQualityUpdateCadence: 'monthly',
+      windowsQualityUpdateCategory: 'security',
+      approvalMethodType: 'automatic',
+      deferredDeploymentInDay: 0,
+    },
+    {
+      '@odata.type': 'microsoft.graph.windowsQualityUpdateApprovalSetting',
+      windowsQualityUpdateCadence: 'outOfBand',
+      windowsQualityUpdateCategory: 'security',
+      approvalMethodType: 'automatic',
+      deferredDeploymentInDay: 0,
+    },
+  ],
 };
 
 // ============================================================
@@ -111,7 +135,8 @@ function deepEqual(a: unknown, b: unknown): boolean {
  */
 function compareAgainstGolden<T extends Record<string, unknown>>(
   actual: T,
-  golden: Partial<T>
+  golden: Partial<T>,
+  nonPatchableFields: Set<string> = new Set()
 ): FieldComparisonResult[] {
   return (Object.keys(golden) as Array<keyof T>)
     .filter((key) => !EXCLUDED_FROM_COMPARISON.has(String(key)))
@@ -123,8 +148,88 @@ function compareAgainstGolden<T extends Record<string, unknown>>(
         expected: expectedValue,
         actual: actualValue,
         isMatch: deepEqual(expectedValue, actualValue),
+        isPatchable: !nonPatchableFields.has(String(key)),
       };
     });
+}
+
+/**
+ * Flattens the installationSchedule nested object into individual FieldComparisonResult entries.
+ * These are patchable — the Graph API accepts the full installationSchedule nested object in PATCH.
+ * The golden standard uses active hours mode.
+ *
+ * Note: Graph API may return @odata.type with or without the '#' prefix for nested objects.
+ * Both formats are handled here.
+ */
+function compareInstallationSchedule(
+  actual: WindowsUpdateForBusinessConfiguration
+): FieldComparisonResult[] {
+  const goldenSchedule = GOLDEN_UPDATE_RING.installationSchedule as WindowsUpdateActiveHoursInstall;
+  const actualSchedule = actual.installationSchedule;
+
+  if (!actualSchedule) {
+    return [
+      {
+        field: 'installationSchedule.activeHoursStart',
+        expected: goldenSchedule.activeHoursStart,
+        actual: undefined,
+        isMatch: false,
+        isPatchable: true,
+      },
+      {
+        field: 'installationSchedule.activeHoursEnd',
+        expected: goldenSchedule.activeHoursEnd,
+        actual: undefined,
+        isMatch: false,
+        isPatchable: true,
+      },
+    ];
+  }
+
+  // Graph API may return @odata.type with or without the '#' prefix for nested objects.
+  // Cast to string to handle both formats without TypeScript discriminated-union errors.
+  const odataType = actualSchedule['@odata.type'] as string;
+  const isActiveHoursType =
+    odataType === '#microsoft.graph.windowsUpdateActiveHoursInstall' ||
+    odataType === 'microsoft.graph.windowsUpdateActiveHoursInstall';
+
+  if (isActiveHoursType) {
+    const actualActiveHours = actualSchedule as WindowsUpdateActiveHoursInstall;
+    return [
+      {
+        field: 'installationSchedule.activeHoursStart',
+        expected: goldenSchedule.activeHoursStart,
+        actual: actualActiveHours.activeHoursStart,
+        isMatch: deepEqual(goldenSchedule.activeHoursStart, actualActiveHours.activeHoursStart),
+        isPatchable: true,
+      },
+      {
+        field: 'installationSchedule.activeHoursEnd',
+        expected: goldenSchedule.activeHoursEnd,
+        actual: actualActiveHours.activeHoursEnd,
+        isMatch: deepEqual(goldenSchedule.activeHoursEnd, actualActiveHours.activeHoursEnd),
+        isPatchable: true,
+      },
+    ];
+  }
+
+  // Actual uses scheduled install type — entire schedule needs to be replaced
+  return [
+    {
+      field: 'installationSchedule.activeHoursStart',
+      expected: goldenSchedule.activeHoursStart,
+      actual: undefined,
+      isMatch: false,
+      isPatchable: true,
+    },
+    {
+      field: 'installationSchedule.activeHoursEnd',
+      expected: goldenSchedule.activeHoursEnd,
+      actual: undefined,
+      isMatch: false,
+      isPatchable: true,
+    },
+  ];
 }
 
 // ============================================================
@@ -145,12 +250,17 @@ export function compareUpdateRings(
       GOLDEN_UPDATE_RING as Record<string, unknown>
     );
 
+    // Add installationSchedule sub-field comparisons (display-only, not patchable)
+    const scheduleFields = compareInstallationSchedule(policy);
+
+    const allFields = [...fields, ...scheduleFields];
+
     return {
       policyId: policy.id ?? 'unknown',
       policyName: policy.displayName,
       policyType: 'updateRing' as const,
-      fields,
-      isFullyCompliant: fields.every((f) => f.isMatch),
+      fields: allFields,
+      isFullyCompliant: allFields.every((f) => f.isMatch),
     };
   });
 }
@@ -193,6 +303,43 @@ export function compareExpeditePolicies(
       policyId: policy.id ?? 'unknown',
       policyName: policy.displayName,
       policyType: 'expeditePolicy' as const,
+      fields,
+      isFullyCompliant: fields.every((f) => f.isMatch),
+    };
+  });
+}
+
+/**
+ * Compares all fetched Windows Quality Update Policies (hotpatch) against the Golden Standard.
+ * approvalSettings is a complex array — display-only comparison (isPatchable: false).
+ * Only hotpatchEnabled is patchable.
+ */
+export function compareQualityUpdatePolicies(
+  policies: WindowsQualityUpdatePolicy[]
+): PolicyComparisonResult[] {
+  return policies.map((policy) => {
+    const fields: FieldComparisonResult[] = [
+      {
+        field: 'hotpatchEnabled',
+        expected: GOLDEN_QUALITY_UPDATE_POLICY.hotpatchEnabled,
+        actual: policy.hotpatchEnabled,
+        isMatch: deepEqual(GOLDEN_QUALITY_UPDATE_POLICY.hotpatchEnabled, policy.hotpatchEnabled),
+        isPatchable: true,
+      },
+      // approvalSettings is a complex array — display-only comparison
+      {
+        field: 'approvalSettings',
+        expected: GOLDEN_QUALITY_UPDATE_POLICY.approvalSettings,
+        actual: policy.approvalSettings,
+        isMatch: deepEqual(GOLDEN_QUALITY_UPDATE_POLICY.approvalSettings, policy.approvalSettings),
+        isPatchable: false,
+      },
+    ];
+
+    return {
+      policyId: policy.id ?? 'unknown',
+      policyName: policy.displayName,
+      policyType: 'qualityUpdatePolicy' as const,
       fields,
       isFullyCompliant: fields.every((f) => f.isMatch),
     };

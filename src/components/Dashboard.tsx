@@ -7,17 +7,21 @@ import {
   compareUpdateRings,
   compareFeatureUpdates,
   compareExpeditePolicies,
+  compareQualityUpdatePolicies,
   GOLDEN_UPDATE_RING,
   GOLDEN_FEATURE_UPDATE,
   GOLDEN_EXPEDITE_POLICY,
+  GOLDEN_QUALITY_UPDATE_POLICY,
 } from '../utils/comparisonEngine';
 import {
   patchUpdateRing,
   patchFeatureUpdateProfile,
   patchQualityUpdateProfile,
+  patchQualityUpdatePolicy,
   createUpdateRing,
   createFeatureUpdateProfile,
   createQualityUpdateProfile,
+  createQualityUpdatePolicy,
 } from '../services/graphService';
 import type { PolicyComparisonResult, FieldComparisonResult } from '../types/graph';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -53,18 +57,25 @@ function FieldRow({ field }: FieldRowProps): React.JSX.Element {
   return (
     <div
       className={`flex items-start justify-between py-2 px-3 rounded text-sm ${
-        field.isMatch ? 'bg-green-950/30' : 'bg-yellow-950/30'
+        field.isMatch
+          ? 'bg-green-950/30'
+          : field.isPatchable
+          ? 'bg-yellow-950/30'
+          : 'bg-orange-950/30'
       }`}
     >
       <span className="font-mono text-slate-300 flex-shrink-0 mr-4">{field.field}</span>
       <div className="flex items-center gap-2 text-right">
         {field.isMatch ? (
           <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
-        ) : (
+        ) : field.isPatchable ? (
           <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0" />
+        ) : (
+          <AlertTriangle className="h-4 w-4 text-orange-400 flex-shrink-0" />
         )}
         {!field.isMatch && (
-          <span className="text-yellow-300 text-xs">
+          <span className={`text-xs ${field.isPatchable ? 'text-yellow-300' : 'text-orange-300'}`}>
+            {!field.isPatchable && <span className="text-orange-400 mr-1">[manual]</span>}
             Got: <code>{JSON.stringify(field.actual)}</code>
           </span>
         )}
@@ -125,19 +136,28 @@ function PolicyCard({ result, onFixDeviation, isFixing }: PolicyCardProps): Reac
         )}
 
         {!result.isFullyCompliant && (
-          <Button
-            size="sm"
-            onClick={() => onFixDeviation(result)}
-            disabled={isFixing}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white w-full"
-          >
-            {isFixing ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <Wrench className="h-4 w-4 mr-2" />
+          <div className="space-y-2">
+            {result.fields.some((f) => !f.isMatch && !f.isPatchable) && (
+              <p className="text-xs text-orange-400">
+                ⚠ Some deviations require manual fix in Intune portal
+              </p>
             )}
-            Fix Deviation
-          </Button>
+            {result.fields.some((f) => !f.isMatch && f.isPatchable) && (
+              <Button
+                size="sm"
+                onClick={() => onFixDeviation(result)}
+                disabled={isFixing}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white w-full"
+              >
+                {isFixing ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Wrench className="h-4 w-4 mr-2" />
+                )}
+                Fix Deviation
+              </Button>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
@@ -215,7 +235,7 @@ function PolicySection({
 
 interface DeployDialogProps {
   open: boolean;
-  policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy' | null;
+  policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy' | 'qualityUpdatePolicy' | null;
   onConfirm: (kundeName: string) => void;
   onCancel: () => void;
   isDeploying: boolean;
@@ -230,7 +250,17 @@ function DeployDialog({
 }: DeployDialogProps): React.JSX.Element {
   const [kundeName, setKundeName] = useState('');
 
-  const needsKundeName = policyType === 'updateRing';
+  const needsKundeName = true;
+
+  const policyNamePreview = (): string => {
+    switch (policyType) {
+      case 'updateRing': return `default_aad_${kundeName || 'kunde'}_win-update`;
+      case 'featureUpdate': return `default_aad_${kundeName || 'kunde'}_win-feature`;
+      case 'expeditePolicy': return `default_aad_${kundeName || 'kunde'}_win-expedite`;
+      case 'qualityUpdatePolicy': return `default_aad_${kundeName || 'kunde'}_win-quality`;
+      default: return '';
+    }
+  };
 
   const handleConfirm = (): void => {
     onConfirm(kundeName);
@@ -261,9 +291,7 @@ function DeployDialog({
             />
             <p className="text-xs text-slate-500">
               Policy will be named:{' '}
-              <code className="text-blue-400">
-                default_aad_{kundeName || 'kunde'}_win-update
-              </code>
+              <code className="text-blue-400">{policyNamePreview()}</code>
             </p>
           </div>
         )}
@@ -301,13 +329,13 @@ function DeployDialog({
 export function Dashboard(): React.JSX.Element {
   const { instance, accounts } = useMsal();
   const queryClient = useQueryClient();
-  const { updateRings, featureUpdates, expeditePolicies, isLoading, isError, errors, refetchAll } =
+  const { updateRings, featureUpdates, expeditePolicies, qualityUpdatePolicies, isLoading, isError, errors, refetchAll } =
     useIntunePolicies();
 
   const [fixingId, setFixingId] = useState<string | null>(null);
   const [deployDialog, setDeployDialog] = useState<{
     open: boolean;
-    policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy' | null;
+    policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy' | 'qualityUpdatePolicy' | null;
   }>({ open: false, policyType: null });
 
   const userName = accounts[0]?.name ?? accounts[0]?.username ?? 'User';
@@ -315,47 +343,54 @@ export function Dashboard(): React.JSX.Element {
   // ---- Comparison Results ----
   const updateRingResults = compareUpdateRings(updateRings);
   const featureUpdateResults = compareFeatureUpdates(featureUpdates);
+  const qualityUpdateResults = compareQualityUpdatePolicies(qualityUpdatePolicies);
   const expediteResults = compareExpeditePolicies(expeditePolicies);
 
   const totalPolicies =
-    updateRingResults.length + featureUpdateResults.length + expediteResults.length;
+    updateRingResults.length + featureUpdateResults.length + qualityUpdateResults.length + expediteResults.length;
   const compliantPolicies = [
     ...updateRingResults,
     ...featureUpdateResults,
+    ...qualityUpdateResults,
     ...expediteResults,
   ].filter((r) => r.isFullyCompliant).length;
 
   // ---- Fix Deviation Mutation ----
   const fixMutation = useMutation({
     mutationFn: async (result: PolicyComparisonResult) => {
-      const deviatingFields = result.fields.filter((f) => !f.isMatch);
+      // Only patch fields that are marked as patchable
+      const deviatingFields = result.fields.filter((f) => !f.isMatch && f.isPatchable);
 
-      // Build patch with only deviating fields, explicitly excluding
-      // read-only fields and complex nested objects that Graph API rejects in PATCH requests
-      const READ_ONLY_FIELDS = new Set([
-        '@odata.type',
-        'id',
-        'displayName',
-        'description',
-        'installationSchedule',    // nested object — requires special PATCH handling
-        'expeditedUpdateSettings', // nested object — requires special PATCH handling
-      ]);
+      if (deviatingFields.length === 0) return;
+
       const patch: Record<string, unknown> = {};
+
+      // installationSchedule sub-fields (e.g. "installationSchedule.activeHoursStart") must be
+      // sent as a complete nested object — the Graph API rejects dotted-key or partial payloads.
+      const hasScheduleDeviation = deviatingFields.some((f) =>
+        f.field.startsWith('installationSchedule.')
+      );
+
+      // Build patch from non-schedule deviating fields only
       deviatingFields
-        .filter((f) => !READ_ONLY_FIELDS.has(f.field))
+        .filter((f) => !f.field.startsWith('installationSchedule.'))
         .forEach((f) => {
           patch[f.field] = f.expected;
         });
 
-      if (Object.keys(patch).length === 0) {
-        // Nothing patchable — all deviations are in read-only fields
-        return;
+      // If any schedule sub-field deviates, include the full golden installationSchedule object
+      if (hasScheduleDeviation && result.policyType === 'updateRing') {
+        patch['installationSchedule'] = GOLDEN_UPDATE_RING.installationSchedule;
       }
+
+      if (Object.keys(patch).length === 0) return;
 
       if (result.policyType === 'updateRing') {
         await patchUpdateRing(result.policyId, patch as Parameters<typeof patchUpdateRing>[1]);
       } else if (result.policyType === 'featureUpdate') {
         await patchFeatureUpdateProfile(result.policyId, patch as Parameters<typeof patchFeatureUpdateProfile>[1]);
+      } else if (result.policyType === 'qualityUpdatePolicy') {
+        await patchQualityUpdatePolicy(result.policyId, patch as Parameters<typeof patchQualityUpdatePolicy>[1]);
       } else {
         await patchQualityUpdateProfile(result.policyId, patch as Parameters<typeof patchQualityUpdateProfile>[1]);
       }
@@ -376,17 +411,27 @@ export function Dashboard(): React.JSX.Element {
 
   // ---- Deploy Standard Mutation ----
   const deployMutation = useMutation({
-    mutationFn: async ({ policyType, kundeName }: { policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy'; kundeName: string }) => {
+    mutationFn: async ({ policyType, kundeName }: { policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy' | 'qualityUpdatePolicy'; kundeName: string }) => {
       if (policyType === 'updateRing') {
-        const payload = {
+        await createUpdateRing({
           ...GOLDEN_UPDATE_RING,
           displayName: `default_aad_${kundeName}_win-update`,
-        };
-        await createUpdateRing(payload);
+        });
       } else if (policyType === 'featureUpdate') {
-        await createFeatureUpdateProfile(GOLDEN_FEATURE_UPDATE);
+        await createFeatureUpdateProfile({
+          ...GOLDEN_FEATURE_UPDATE,
+          displayName: `default_aad_${kundeName}_win-feature`,
+        });
+      } else if (policyType === 'expeditePolicy') {
+        await createQualityUpdateProfile({
+          ...GOLDEN_EXPEDITE_POLICY,
+          displayName: `default_aad_${kundeName}_win-expedite`,
+        });
       } else {
-        await createQualityUpdateProfile(GOLDEN_EXPEDITE_POLICY);
+        await createQualityUpdatePolicy({
+          ...GOLDEN_QUALITY_UPDATE_POLICY,
+          displayName: `default_aad_${kundeName}_win-quality`,
+        });
       }
     },
     onSuccess: () => {
@@ -522,6 +567,15 @@ export function Dashboard(): React.JSX.Element {
           fixingId={fixingId}
           onDeploy={() => setDeployDialog({ open: true, policyType: 'featureUpdate' })}
           isDeploying={deployMutation.isPending && deployDialog.policyType === 'featureUpdate'}
+        />
+
+        <PolicySection
+          title="Windows Quality Update Policies"
+          results={qualityUpdateResults}
+          onFixDeviation={handleFixDeviation}
+          fixingId={fixingId}
+          onDeploy={() => setDeployDialog({ open: true, policyType: 'qualityUpdatePolicy' })}
+          isDeploying={deployMutation.isPending && deployDialog.policyType === 'qualityUpdatePolicy'}
         />
 
         <PolicySection

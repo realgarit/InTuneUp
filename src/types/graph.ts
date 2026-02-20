@@ -8,13 +8,14 @@ export interface FieldComparisonResult {
   expected: unknown;
   actual: unknown;
   isMatch: boolean;
+  isPatchable: boolean; // true = can be auto-fixed via PATCH; false = display only
 }
 
 /** Represents the full comparison result for one policy */
 export interface PolicyComparisonResult {
   policyId: string;
   policyName: string;
-  policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy';
+  policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy' | 'qualityUpdatePolicy';
   fields: FieldComparisonResult[];
   isFullyCompliant: boolean;
 }
@@ -29,11 +30,21 @@ export interface ODataListResponse<T> {
 // Update Ring (windowsUpdateForBusinessConfiguration)
 // ============================================================
 
+export interface WindowsUpdateActiveHoursInstall {
+  '@odata.type': '#microsoft.graph.windowsUpdateActiveHoursInstall';
+  activeHoursStart: string;
+  activeHoursEnd: string;
+}
+
 export interface WindowsUpdateScheduledInstall {
   '@odata.type': 'microsoft.graph.windowsUpdateScheduledInstall';
   scheduledInstallDay: string;
   scheduledInstallTime: string;
 }
+
+export type WindowsUpdateInstallSchedule =
+  | WindowsUpdateActiveHoursInstall
+  | WindowsUpdateScheduledInstall;
 
 export interface WindowsUpdateForBusinessConfiguration {
   id?: string;
@@ -49,7 +60,7 @@ export interface WindowsUpdateForBusinessConfiguration {
   businessReadyUpdatesOnly: string;
   automaticUpdateMode: string;
   updateWeeks?: string;
-  installationSchedule: WindowsUpdateScheduledInstall;
+  installationSchedule: WindowsUpdateInstallSchedule;
   userPauseAccess: string;
   userWindowsUpdateScanAccess: string;
   useDeadlineForFeatureUpdates?: boolean;
@@ -94,10 +105,32 @@ export interface WindowsQualityUpdateProfile {
 }
 
 // ============================================================
+// Windows Quality Update Policy (windowsQualityUpdatePolicy — hotpatch)
+// ============================================================
+
+export interface WindowsQualityUpdateApprovalSetting {
+  '@odata.type': 'microsoft.graph.windowsQualityUpdateApprovalSetting';
+  windowsQualityUpdateCadence: 'monthly' | 'outOfBand' | 'unknownFutureValue';
+  windowsQualityUpdateCategory: 'all' | 'security' | 'nonSecurity' | 'unknownFutureValue' | 'quickMachineRecovery';
+  approvalMethodType: 'manual' | 'automatic' | 'unknownFutureValue';
+  deferredDeploymentInDay: number;
+}
+
+export interface WindowsQualityUpdatePolicy {
+  id?: string;
+  '@odata.type': '#microsoft.graph.windowsQualityUpdatePolicy';
+  displayName: string;
+  description: string;
+  hotpatchEnabled: boolean;
+  approvalSettings: WindowsQualityUpdateApprovalSetting[];
+}
+
+// ============================================================
 // Union type for all policy types
 // ============================================================
 
 export type AnyPolicy =
   | WindowsUpdateForBusinessConfiguration
   | WindowsFeatureUpdateProfile
-  | WindowsQualityUpdateProfile;
+  | WindowsQualityUpdateProfile
+  | WindowsQualityUpdatePolicy;

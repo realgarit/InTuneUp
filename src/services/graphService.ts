@@ -4,6 +4,7 @@ import type {
   WindowsUpdateForBusinessConfiguration,
   WindowsFeatureUpdateProfile,
   WindowsQualityUpdateProfile,
+  WindowsQualityUpdatePolicy,
 } from '../types/graph';
 
 const GRAPH_BASE_URL = 'https://graph.microsoft.com/beta';
@@ -131,7 +132,16 @@ export async function patchUpdateRing(
   id: string,
   payload: Partial<WindowsUpdateForBusinessConfiguration>
 ): Promise<void> {
-  return graphPatch<WindowsUpdateForBusinessConfiguration>(UPDATE_RING_BY_ID(id), payload);
+  // deviceConfigurations is a polymorphic collection — @odata.type is REQUIRED
+  // in PATCH requests to identify the concrete type for model validation.
+  const patchPayload = {
+    '@odata.type': '#microsoft.graph.windowsUpdateForBusinessConfiguration' as const,
+    ...payload,
+  };
+  return graphPatch<WindowsUpdateForBusinessConfiguration>(
+    UPDATE_RING_BY_ID(id),
+    patchPayload
+  );
 }
 
 // ============================================================
@@ -194,4 +204,35 @@ export async function patchQualityUpdateProfile(
   payload: Partial<WindowsQualityUpdateProfile>
 ): Promise<void> {
   return graphPatch<WindowsQualityUpdateProfile>(QUALITY_UPDATE_BY_ID(id), payload);
+}
+
+// ============================================================
+// Windows Quality Update Policies (hotpatch) — windowsQualityUpdatePolicy
+// ============================================================
+
+const QUALITY_UPDATE_POLICIES_ENDPOINT = '/deviceManagement/windowsQualityUpdatePolicies';
+const QUALITY_UPDATE_POLICY_BY_ID = (id: string) =>
+  `/deviceManagement/windowsQualityUpdatePolicies/${id}`;
+
+export async function fetchQualityUpdatePolicies(): Promise<WindowsQualityUpdatePolicy[]> {
+  const response = await graphGet<ODataListResponse<WindowsQualityUpdatePolicy>>(
+    QUALITY_UPDATE_POLICIES_ENDPOINT
+  );
+  return response.value;
+}
+
+export async function createQualityUpdatePolicy(
+  payload: Omit<WindowsQualityUpdatePolicy, 'id'>
+): Promise<WindowsQualityUpdatePolicy> {
+  return graphPost<
+    Omit<WindowsQualityUpdatePolicy, 'id'>,
+    WindowsQualityUpdatePolicy
+  >(QUALITY_UPDATE_POLICIES_ENDPOINT, payload);
+}
+
+export async function patchQualityUpdatePolicy(
+  id: string,
+  payload: Partial<WindowsQualityUpdatePolicy>
+): Promise<void> {
+  return graphPatch<WindowsQualityUpdatePolicy>(QUALITY_UPDATE_POLICY_BY_ID(id), payload);
 }

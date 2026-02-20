@@ -3,23 +3,27 @@ import {
   fetchUpdateRings,
   fetchFeatureUpdateProfiles,
   fetchQualityUpdateProfiles,
+  fetchQualityUpdatePolicies,
 } from '../services/graphService';
 import type {
   WindowsUpdateForBusinessConfiguration,
   WindowsFeatureUpdateProfile,
   WindowsQualityUpdateProfile,
+  WindowsQualityUpdatePolicy,
 } from '../types/graph';
 
 export const QUERY_KEYS = {
   updateRings: ['intune', 'updateRings'] as const,
   featureUpdates: ['intune', 'featureUpdates'] as const,
   expeditePolicies: ['intune', 'expeditePolicies'] as const,
+  qualityUpdatePolicies: ['intune', 'qualityUpdatePolicies'] as const,
 } as const;
 
 export interface IntunePoliciesResult {
   updateRings: WindowsUpdateForBusinessConfiguration[];
   featureUpdates: WindowsFeatureUpdateProfile[];
   expeditePolicies: WindowsQualityUpdateProfile[];
+  qualityUpdatePolicies: WindowsQualityUpdatePolicy[];
   isLoading: boolean;
   isError: boolean;
   errors: (Error | null)[];
@@ -47,10 +51,16 @@ export function useIntunePolicies(): IntunePoliciesResult {
         retry: 1,
         staleTime: 1000 * 60 * 5,
       },
+      {
+        queryKey: QUERY_KEYS.qualityUpdatePolicies,
+        queryFn: fetchQualityUpdatePolicies,
+        retry: 1,
+        staleTime: 1000 * 60 * 5,
+      },
     ],
   });
 
-  const [updateRingsQuery, featureUpdatesQuery, expeditePoliciesQuery] = results;
+  const [updateRingsQuery, featureUpdatesQuery, expeditePoliciesQuery, qualityUpdatePoliciesQuery] = results;
 
   const isLoading = results.some((r) => r.isLoading);
   const isError = results.some((r) => r.isError);
@@ -60,6 +70,7 @@ export function useIntunePolicies(): IntunePoliciesResult {
     updateRings: updateRingsQuery.data ?? [],
     featureUpdates: featureUpdatesQuery.data ?? [],
     expeditePolicies: expeditePoliciesQuery.data ?? [],
+    qualityUpdatePolicies: qualityUpdatePoliciesQuery.data ?? [],
     isLoading,
     isError,
     errors,
