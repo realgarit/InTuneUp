@@ -34,22 +34,19 @@
   "featureUpdatesDeferralPeriodInDays": 90,  
   "allowWindows11Upgrade": true,  
   "featureUpdatesRollbackWindowInDays": 60,  
-  "businessReadyUpdatesOnly": "businessReadyOnly",   
-  "automaticUpdateMode": "autoInstallAndRebootAtScheduledTime",  
-  "installationSchedule": {  
-    "@odata.type": "microsoft.graph.windowsUpdateScheduledInstall",  
-    "scheduledInstallDay": "everyDay",  
-    "scheduledInstallTime": "19:00:00.0000000"  
-  },  
-  "userPauseAccess": "disable",  
-  "userWindowsUpdateScanAccess": "enable",  
-  "useDeadlineForFeatureUpdates": true,  
+  "businessReadyUpdatesOnly": "businessReadyOnly",  
+  "automaticUpdateMode": "autoInstallAndRebootAtMaintenanceTime",  
+  "userPauseAccess": "disabled",  
+  "userWindowsUpdateScanAccess": "enabled",  
   "deadlineForFeatureUpdatesInDays": 14,  
-  "useDeadlineForQualityUpdates": true,  
   "deadlineForQualityUpdatesInDays": 7,  
   "deadlineGracePeriodInDays": 1,  
-  "autoRestartNotificationDismissal": "automatic"  
+  "autoRestartNotificationDismissal": "notConfigured",  
+  "updateNotificationLevel": "defaultNotifications",  
+  "postponeRebootUntilAfterDeadline": false  
 }
+
+**Note on `installationSchedule`:** When `automaticUpdateMode` is `"autoInstallAndRebootAtMaintenanceTime"`, Windows uses its own managed maintenance windows — the `installationSchedule` field is not applicable and is excluded from compliance comparison. It is not included in the Golden Standard for this mode.
 
 ### **Category 2: Feature Update Policy**
 

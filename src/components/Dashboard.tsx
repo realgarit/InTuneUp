@@ -49,6 +49,23 @@ import {
 // Sub-components
 // ============================================================
 
+function formatFieldValue(value: unknown): string {
+  if (value === undefined || value === null) return '(not set)';
+  if (typeof value === 'string') {
+    // Format time strings like "06:00:00" or "18:00:00" as "6:00 AM" / "6:00 PM"
+    const timeMatch = /^(\d{2}):(\d{2}):\d{2}/.exec(value);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1], 10);
+      const minutes = timeMatch[2];
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 === 0 ? 12 : hours % 12;
+      return `${displayHours}:${minutes} ${period}`;
+    }
+    return value;
+  }
+  return JSON.stringify(value);
+}
+
 interface FieldRowProps {
   field: FieldComparisonResult;
 }
@@ -56,7 +73,7 @@ interface FieldRowProps {
 function FieldRow({ field }: FieldRowProps): React.JSX.Element {
   return (
     <div
-      className={`flex items-start justify-between py-2 px-3 rounded text-sm ${
+      className={`py-2 px-3 rounded text-sm space-y-1 ${
         field.isMatch
           ? 'bg-green-950/30'
           : field.isPatchable
@@ -64,8 +81,7 @@ function FieldRow({ field }: FieldRowProps): React.JSX.Element {
           : 'bg-orange-950/30'
       }`}
     >
-      <span className="font-mono text-slate-300 flex-shrink-0 mr-4">{field.field}</span>
-      <div className="flex items-center gap-2 text-right">
+      <div className="flex items-center gap-2">
         {field.isMatch ? (
           <CheckCircle2 className="h-4 w-4 text-green-400 flex-shrink-0" />
         ) : field.isPatchable ? (
@@ -73,13 +89,15 @@ function FieldRow({ field }: FieldRowProps): React.JSX.Element {
         ) : (
           <AlertTriangle className="h-4 w-4 text-orange-400 flex-shrink-0" />
         )}
-        {!field.isMatch && (
-          <span className={`text-xs ${field.isPatchable ? 'text-yellow-300' : 'text-orange-300'}`}>
-            {!field.isPatchable && <span className="text-orange-400 mr-1">[manual]</span>}
-            Got: <code>{JSON.stringify(field.actual)}</code>
-          </span>
-        )}
+        <span className="font-mono text-slate-300 text-xs break-all">{field.field}</span>
       </div>
+      {!field.isMatch && (
+        <div className={`pl-6 text-xs space-y-0.5 ${field.isPatchable ? 'text-yellow-300' : 'text-orange-300'}`}>
+          {!field.isPatchable && <span className="text-orange-400 block">[manual fix required]</span>}
+          <div>Got: <code className="break-all">{formatFieldValue(field.actual)}</code></div>
+          <div className="text-slate-400">Expected: <code className="break-all">{formatFieldValue(field.expected)}</code></div>
+        </div>
+      )}
     </div>
   );
 }
@@ -128,7 +146,7 @@ function PolicyCard({ result, onFixDeviation, isFixing }: PolicyCardProps): Reac
         </Button>
 
         {expanded && (
-          <div className="space-y-1 max-h-64 overflow-y-auto">
+          <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
             {result.fields.map((field) => (
               <FieldRow key={field.field} field={field} />
             ))}
@@ -365,22 +383,29 @@ export function Dashboard(): React.JSX.Element {
 
       const patch: Record<string, unknown> = {};
 
-      // installationSchedule sub-fields (e.g. "installationSchedule.activeHoursStart") must be
-      // sent as a complete nested object — the Graph API rejects dotted-key or partial payloads.
+      // Check if installationSchedule sub-fields are deviating (send full object)
       const hasScheduleDeviation = deviatingFields.some((f) =>
         f.field.startsWith('installationSchedule.')
       );
 
-      // Build patch from non-schedule deviating fields only
+      // Check if approvalSettings is deviating (requires full array replacement)
+      const hasApprovalSettingsDeviation = deviatingFields.some((f) => f.field === 'approvalSettings');
+
+      // Build patch from non-special deviating fields
       deviatingFields
-        .filter((f) => !f.field.startsWith('installationSchedule.'))
+        .filter((f) => !f.field.startsWith('installationSchedule.') && f.field !== 'approvalSettings')
         .forEach((f) => {
           patch[f.field] = f.expected;
         });
 
-      // If any schedule sub-field deviates, include the full golden installationSchedule object
+      // Handle installationSchedule as full object replacement
       if (hasScheduleDeviation && result.policyType === 'updateRing') {
         patch['installationSchedule'] = GOLDEN_UPDATE_RING.installationSchedule;
+      }
+
+      // Handle approvalSettings as full array replacement
+      if (hasApprovalSettingsDeviation && result.policyType === 'qualityUpdatePolicy') {
+        patch['approvalSettings'] = GOLDEN_QUALITY_UPDATE_POLICY.approvalSettings;
       }
 
       if (Object.keys(patch).length === 0) return;

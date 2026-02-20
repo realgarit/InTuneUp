@@ -234,5 +234,9 @@ export async function patchQualityUpdatePolicy(
   id: string,
   payload: Partial<WindowsQualityUpdatePolicy>
 ): Promise<void> {
-  return graphPatch<WindowsQualityUpdatePolicy>(QUALITY_UPDATE_POLICY_BY_ID(id), payload);
+  const patchPayload = {
+    '@odata.type': '#microsoft.graph.windowsQualityUpdatePolicy' as const,
+    ...payload,
+  };
+  return graphPatch<WindowsQualityUpdatePolicy>(QUALITY_UPDATE_POLICY_BY_ID(id), patchPayload);
 }

@@ -24,6 +24,7 @@ export const GOLDEN_UPDATE_RING: Omit<WindowsUpdateForBusinessConfiguration, 'id
   featureUpdatesRollbackWindowInDays: 60,
   businessReadyUpdatesOnly: 'businessReadyOnly',
   automaticUpdateMode: 'autoInstallAndRebootAtMaintenanceTime',
+  updateWeeks: 'everyWeek',
   installationSchedule: {
     '@odata.type': '#microsoft.graph.windowsUpdateActiveHoursInstall',
     activeHoursStart: '06:00:00',
@@ -45,6 +46,7 @@ export const GOLDEN_FEATURE_UPDATE: Omit<WindowsFeatureUpdateProfile, 'id'> = {
   description: 'No Description',
   featureUpdateVersion: 'Windows 11, version 25H2',
   installFeatureUpdatesOptional: false,
+  installLatestWindows10OnWindows11IneligibleDevice: false,
 };
 
 export const GOLDEN_EXPEDITE_POLICY: Omit<WindowsQualityUpdateProfile, 'id'> = {
@@ -92,7 +94,6 @@ export const GOLDEN_QUALITY_UPDATE_POLICY: Omit<WindowsQualityUpdatePolicy, 'id'
  * - id: read-only identifier
  * - displayName: customer-specific, not a compliance field
  * - description: informational only, not a compliance setting
- * - installationSchedule: complex nested object — polymorphic type requires special PATCH handling
  * - expeditedUpdateSettings: complex nested object — polymorphic type requires special PATCH handling
  */
 const EXCLUDED_FROM_COMPARISON = new Set<string>([
@@ -100,7 +101,7 @@ const EXCLUDED_FROM_COMPARISON = new Set<string>([
   'id',
   'displayName',
   'description',
-  'installationSchedule',      // nested object — requires special PATCH handling
+  'installationSchedule',      // compared via compareInstallationSchedule() sub-field helper instead
   'expeditedUpdateSettings',   // nested object — requires special PATCH handling
 ]);
 
@@ -153,80 +154,66 @@ function compareAgainstGolden<T extends Record<string, unknown>>(
     });
 }
 
+// ============================================================
+// installationSchedule sub-field comparison
+// ============================================================
+
 /**
- * Flattens the installationSchedule nested object into individual FieldComparisonResult entries.
- * These are patchable — the Graph API accepts the full installationSchedule nested object in PATCH.
- * The golden standard uses active hours mode.
- *
- * Note: Graph API may return @odata.type with or without the '#' prefix for nested objects.
- * Both formats are handled here.
+ * Normalizes a Graph API time string by stripping fractional seconds.
+ * e.g. "06:00:00.0000000" → "06:00:00"
+ */
+function normalizeTimeString(value: string | undefined): string | undefined {
+  if (!value) return value;
+  // Strip fractional seconds: "HH:MM:SS.fffffff" → "HH:MM:SS"
+  return value.replace(/(\d{2}:\d{2}:\d{2})\.\d+/, '$1');
+}
+
+/**
+ * Compares the installationSchedule active hours fields individually.
+ * The golden standard uses windowsUpdateActiveHoursInstall (6 AM – 6 PM).
+ * These fields are patchable — the full installationSchedule object is sent in PATCH.
+ * Time strings are normalized (fractional seconds stripped) before comparison.
  */
 function compareInstallationSchedule(
   actual: WindowsUpdateForBusinessConfiguration
 ): FieldComparisonResult[] {
   const goldenSchedule = GOLDEN_UPDATE_RING.installationSchedule as WindowsUpdateActiveHoursInstall;
-  const actualSchedule = actual.installationSchedule;
+  const actualSchedule = actual.installationSchedule as Record<string, unknown> | null | undefined;
 
-  if (!actualSchedule) {
-    return [
-      {
-        field: 'installationSchedule.activeHoursStart',
-        expected: goldenSchedule.activeHoursStart,
-        actual: undefined,
-        isMatch: false,
-        isPatchable: true,
-      },
-      {
-        field: 'installationSchedule.activeHoursEnd',
-        expected: goldenSchedule.activeHoursEnd,
-        actual: undefined,
-        isMatch: false,
-        isPatchable: true,
-      },
-    ];
-  }
+  const goldenStart = goldenSchedule.activeHoursStart;
+  const goldenEnd = goldenSchedule.activeHoursEnd;
 
-  // Graph API may return @odata.type with or without the '#' prefix for nested objects.
-  // Cast to string to handle both formats without TypeScript discriminated-union errors.
-  const odataType = actualSchedule['@odata.type'] as string;
+  // Detect active hours type by @odata.type (with or without #) or by property presence
+  const odataType = actualSchedule?.['@odata.type'] as string | undefined;
   const isActiveHoursType =
     odataType === '#microsoft.graph.windowsUpdateActiveHoursInstall' ||
-    odataType === 'microsoft.graph.windowsUpdateActiveHoursInstall';
+    odataType === 'microsoft.graph.windowsUpdateActiveHoursInstall' ||
+    ('activeHoursStart' in (actualSchedule ?? {}));
 
-  if (isActiveHoursType) {
-    const actualActiveHours = actualSchedule as WindowsUpdateActiveHoursInstall;
-    return [
-      {
-        field: 'installationSchedule.activeHoursStart',
-        expected: goldenSchedule.activeHoursStart,
-        actual: actualActiveHours.activeHoursStart,
-        isMatch: deepEqual(goldenSchedule.activeHoursStart, actualActiveHours.activeHoursStart),
-        isPatchable: true,
-      },
-      {
-        field: 'installationSchedule.activeHoursEnd',
-        expected: goldenSchedule.activeHoursEnd,
-        actual: actualActiveHours.activeHoursEnd,
-        isMatch: deepEqual(goldenSchedule.activeHoursEnd, actualActiveHours.activeHoursEnd),
-        isPatchable: true,
-      },
-    ];
-  }
+  const rawStart = isActiveHoursType
+    ? (actualSchedule?.['activeHoursStart'] as string | undefined)
+    : undefined;
+  const rawEnd = isActiveHoursType
+    ? (actualSchedule?.['activeHoursEnd'] as string | undefined)
+    : undefined;
 
-  // Actual uses scheduled install type — entire schedule needs to be replaced
+  // Normalize fractional seconds for comparison (API returns "06:00:00.0000000")
+  const actualStart = normalizeTimeString(rawStart);
+  const actualEnd = normalizeTimeString(rawEnd);
+
   return [
     {
       field: 'installationSchedule.activeHoursStart',
-      expected: goldenSchedule.activeHoursStart,
-      actual: undefined,
-      isMatch: false,
+      expected: goldenStart,
+      actual: actualStart,
+      isMatch: deepEqual(goldenStart, actualStart),
       isPatchable: true,
     },
     {
       field: 'installationSchedule.activeHoursEnd',
-      expected: goldenSchedule.activeHoursEnd,
-      actual: undefined,
-      isMatch: false,
+      expected: goldenEnd,
+      actual: actualEnd,
+      isMatch: deepEqual(goldenEnd, actualEnd),
       isPatchable: true,
     },
   ];
@@ -238,8 +225,8 @@ function compareInstallationSchedule(
 
 /**
  * Compares all fetched Update Ring policies against the Golden Standard.
- * Read-only and non-compliance fields (displayName, description, @odata.type, id)
- * are excluded centrally by compareAgainstGolden via EXCLUDED_FROM_COMPARISON.
+ * installationSchedule active hours sub-fields are compared individually and are patchable.
+ * updateWeeks IS compared — it is a real compliance field.
  */
 export function compareUpdateRings(
   policies: WindowsUpdateForBusinessConfiguration[]
@@ -250,9 +237,8 @@ export function compareUpdateRings(
       GOLDEN_UPDATE_RING as Record<string, unknown>
     );
 
-    // Add installationSchedule sub-field comparisons (display-only, not patchable)
+    // Add installationSchedule active hours sub-field comparisons
     const scheduleFields = compareInstallationSchedule(policy);
-
     const allFields = [...fields, ...scheduleFields];
 
     return {
@@ -326,13 +312,12 @@ export function compareQualityUpdatePolicies(
         isMatch: deepEqual(GOLDEN_QUALITY_UPDATE_POLICY.hotpatchEnabled, policy.hotpatchEnabled),
         isPatchable: true,
       },
-      // approvalSettings is a complex array — display-only comparison
       {
         field: 'approvalSettings',
         expected: GOLDEN_QUALITY_UPDATE_POLICY.approvalSettings,
         actual: policy.approvalSettings,
         isMatch: deepEqual(GOLDEN_QUALITY_UPDATE_POLICY.approvalSettings, policy.approvalSettings),
-        isPatchable: false,
+        isPatchable: true,
       },
     ];
 

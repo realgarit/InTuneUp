@@ -30,16 +30,16 @@ export interface ODataListResponse<T> {
 // Update Ring (windowsUpdateForBusinessConfiguration)
 // ============================================================
 
-export interface WindowsUpdateActiveHoursInstall {
-  '@odata.type': '#microsoft.graph.windowsUpdateActiveHoursInstall';
-  activeHoursStart: string;
-  activeHoursEnd: string;
-}
-
 export interface WindowsUpdateScheduledInstall {
-  '@odata.type': 'microsoft.graph.windowsUpdateScheduledInstall';
+  '@odata.type': '#microsoft.graph.windowsUpdateScheduledInstall' | 'microsoft.graph.windowsUpdateScheduledInstall';
   scheduledInstallDay: string;
   scheduledInstallTime: string;
+}
+
+export interface WindowsUpdateActiveHoursInstall {
+  '@odata.type': '#microsoft.graph.windowsUpdateActiveHoursInstall' | 'microsoft.graph.windowsUpdateActiveHoursInstall';
+  activeHoursStart: string;
+  activeHoursEnd: string;
 }
 
 export type WindowsUpdateInstallSchedule =
@@ -60,7 +60,7 @@ export interface WindowsUpdateForBusinessConfiguration {
   businessReadyUpdatesOnly: string;
   automaticUpdateMode: string;
   updateWeeks?: string;
-  installationSchedule: WindowsUpdateInstallSchedule;
+  installationSchedule?: WindowsUpdateInstallSchedule | null;
   userPauseAccess: string;
   userWindowsUpdateScanAccess: string;
   useDeadlineForFeatureUpdates?: boolean;
@@ -84,6 +84,7 @@ export interface WindowsFeatureUpdateProfile {
   description: string;
   featureUpdateVersion: string;
   installFeatureUpdatesOptional: boolean;
+  installLatestWindows10OnWindows11IneligibleDevice?: boolean;
 }
 
 // ============================================================
