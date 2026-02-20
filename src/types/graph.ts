@@ -48,15 +48,18 @@ export interface WindowsUpdateForBusinessConfiguration {
   featureUpdatesRollbackWindowInDays: number;
   businessReadyUpdatesOnly: string;
   automaticUpdateMode: string;
+  updateWeeks?: string;
   installationSchedule: WindowsUpdateScheduledInstall;
   userPauseAccess: string;
   userWindowsUpdateScanAccess: string;
-  useDeadlineForFeatureUpdates: boolean;
+  useDeadlineForFeatureUpdates?: boolean;
   deadlineForFeatureUpdatesInDays: number;
-  useDeadlineForQualityUpdates: boolean;
+  useDeadlineForQualityUpdates?: boolean;
   deadlineForQualityUpdatesInDays: number;
   deadlineGracePeriodInDays: number;
   autoRestartNotificationDismissal: string;
+  updateNotificationLevel?: string;
+  postponeRebootUntilAfterDeadline?: boolean;
 }
 
 // ============================================================

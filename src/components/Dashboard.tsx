@@ -329,10 +329,28 @@ export function Dashboard(): React.JSX.Element {
   const fixMutation = useMutation({
     mutationFn: async (result: PolicyComparisonResult) => {
       const deviatingFields = result.fields.filter((f) => !f.isMatch);
+
+      // Build patch with only deviating fields, explicitly excluding
+      // read-only fields and complex nested objects that Graph API rejects in PATCH requests
+      const READ_ONLY_FIELDS = new Set([
+        '@odata.type',
+        'id',
+        'displayName',
+        'description',
+        'installationSchedule',    // nested object — requires special PATCH handling
+        'expeditedUpdateSettings', // nested object — requires special PATCH handling
+      ]);
       const patch: Record<string, unknown> = {};
-      deviatingFields.forEach((f) => {
-        patch[f.field] = f.expected;
-      });
+      deviatingFields
+        .filter((f) => !READ_ONLY_FIELDS.has(f.field))
+        .forEach((f) => {
+          patch[f.field] = f.expected;
+        });
+
+      if (Object.keys(patch).length === 0) {
+        // Nothing patchable — all deviations are in read-only fields
+        return;
+      }
 
       if (result.policyType === 'updateRing') {
         await patchUpdateRing(result.policyId, patch as Parameters<typeof patchUpdateRing>[1]);
@@ -383,7 +401,7 @@ export function Dashboard(): React.JSX.Element {
   };
 
   const handleSignOut = (): void => {
-    void instance.logoutPopup({
+    void instance.logoutRedirect({
       postLogoutRedirectUri: window.location.origin,
     });
   };

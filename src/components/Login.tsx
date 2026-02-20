@@ -9,7 +9,7 @@ export function Login(): React.JSX.Element {
   const { instance } = useMsal();
 
   const handleLogin = (): void => {
-    void instance.loginPopup(loginRequest);
+    void instance.loginRedirect(loginRequest);
   };
 
   return (

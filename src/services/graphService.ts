@@ -50,6 +50,10 @@ async function buildHeaders(): Promise<HeadersInit> {
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorBody = await response.text();
+    console.error(`[GraphService] ${response.status} ${response.statusText}`, {
+      url: response.url,
+      body: errorBody,
+    });
     throw new Error(
       `Graph API error ${response.status} ${response.statusText}: ${errorBody}`
     );
@@ -67,7 +71,10 @@ async function graphGet<T>(endpoint: string): Promise<T> {
     method: 'GET',
     headers,
   });
-  return handleResponse<T>(response);
+  const result = await handleResponse<T>(response);
+  // Temporary debug logging — useful for validating raw API field values
+  console.log(`[GraphService] GET ${endpoint} response:`, JSON.stringify(result, null, 2));
+  return result;
 }
 
 async function graphPost<TBody, TResponse>(
@@ -88,6 +95,7 @@ async function graphPatch<TBody>(
   body: Partial<TBody>
 ): Promise<void> {
   const headers = await buildHeaders();
+  console.log(`[GraphService] PATCH ${GRAPH_BASE_URL}${endpoint}`, JSON.stringify(body, null, 2));
   const response = await fetch(`${GRAPH_BASE_URL}${endpoint}`, {
     method: 'PATCH',
     headers,

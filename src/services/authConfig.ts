@@ -2,10 +2,8 @@ import { PublicClientApplication, Configuration, LogLevel } from '@azure/msal-br
 
 const msalConfig: Configuration = {
   auth: {
-    // Replace with your actual Azure App Registration Client ID
     clientId: import.meta.env.VITE_AZURE_CLIENT_ID as string,
-    // Replace with your actual Azure Tenant ID, or use 'organizations' for multi-tenant
-    authority: `https://login.microsoftonline.com/${(import.meta.env.VITE_AZURE_TENANT_ID as string | undefined) ?? 'organizations'}`,
+    authority: `https://login.microsoftonline.com/${(import.meta.env.VITE_AZURE_TENANT_ID as string) ?? 'organizations'}`,
     redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
   },
