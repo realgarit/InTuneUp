@@ -1,32 +1,35 @@
 # Logs
 logs
-*.log npm-debug.log*
-yarn-debug.log\*
-yarn-error.log\*
-pnpm-debug.log\*
-lerna-debug.log\*
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Dependencies
-node\_modules
+node_modules
 dist
 dist-ssr
-\*.local
+*.local
 
 # Environment Variables
 .env
-.env.\*
-\!.env.example
+.env.*
+.env.local
+.env*.local
+!.env.example
 
 # IDE / Editor
-.vscode/\*
-\!.vscode/extensions.json
+.vscode/*
+!.vscode/extensions.json
 .idea
-\*.suo
+*.suo
 *.ntvs*
-\*.njsproj
-\*.sln
-\*.sw?
+*.njsproj
+*.sln
+*.sw?
 
 # OS Files
-.DS\_Store
+.DS_Store
 Thumbs.db
