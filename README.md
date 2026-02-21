@@ -1,73 +1,104 @@
-# React + TypeScript + Vite
+# InTuneUp
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+<img src="public/logo.svg" alt="Logo" width="64" height="64" style="display:block; margin: 0 auto;" />
 
-Currently, two official plugins are available:
+<p align="center">Version 1.0.0</p>
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org)
+[![Microsoft Intune](https://img.shields.io/badge/Microsoft-Intune-0078D4?style=flat&logo=microsoft)](https://learn.microsoft.com/en-us/mem/intune/)
+[![Azure](https://img.shields.io/badge/Azure-Static%20Web%20Apps-0078D4?style=flat&logo=microsoftazure)](https://azure.microsoft.com/services/app-service/static/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-## React Compiler
+A React application that helps MSPs manage Microsoft Intune Windows Update configurations. Compare existing policies against your golden standard, fix deviations with one click, or deploy new standard policies to your Intune tenant.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Features
 
-## Expanding the ESLint configuration
+- Sign in with Microsoft Entra ID (Azure AD) using MSAL
+- View all Windows Update policies in one place
+- Automatically checks each policy against your golden standard
+- Patch patchable deviations directly from the UI
+- Create new policies from your golden standard templates
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Application Workflow
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+![Application Workflow](ApplicationWorkFlowandStateManagement.png)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Supported Policy Types
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Update Rings (Windows Update for Business)
+- Feature Update Policies
+- Expedite Policies (Quality Updates)
+- Quality Update Policies
+
+## Tech Stack
+
+- React 19 with TypeScript
+- Vite for build tooling
+- Microsoft Authentication Library (MSAL) for Entra ID auth
+- TanStack React Query for data fetching
+- shadcn/ui + Tailwind CSS for the interface
+- Microsoft Graph API (beta endpoint)
+
+## Getting Started
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Copy the environment example:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Configure your Entra ID app registration in `.env`:
+   ```
+   VITE_AZURE_CLIENT_ID=your-client-id
+   VITE_AZURE_TENANT_ID=organizations
+   VITE_AZURE_REDIRECT_URI=http://localhost:5173
+   ```
+
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+## Azure Setup
+
+Create an app registration in Microsoft Entra ID:
+
+1. Go to App Registrations > New Registration
+2. Choose Accounts in any organizational directory (Multitenant)
+3. Add a Redirect URI as Single Page Application: `http://localhost:5173`
+4. Under API Permissions, add `DeviceManagementConfiguration.ReadWrite.All` (Delegated)
+5. Enable Access tokens and ID tokens in Authentication
+
+## Project Structure
+
+```
+src/
+├── components/          # UI components
+│   ├── Dashboard.tsx    # Main policy dashboard
+│   └── ui/              # shadcn/ui components
+├── hooks/               # Custom React hooks
+│   └── useIntunePolicies.ts
+├── services/            # Graph API service layer
+│   ├── authConfig.ts
+│   └── graphService.ts
+├── types/               # TypeScript type definitions
+│   └── graph.ts
+└── utils/               # Utilities
+    └── comparisonEngine.ts   # Policy comparison logic
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Available Scripts
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run lint` - Run ESLint
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## License
+
+MIT
+
