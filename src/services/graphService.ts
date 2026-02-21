@@ -176,7 +176,7 @@ export async function patchFeatureUpdateProfile(
 }
 
 // ============================================================
-// Expedite / Quality Update Profiles — windowsQualityUpdateProfile
+// Expedite Update Profiles — windowsQualityUpdateProfile
 // ============================================================
 
 const QUALITY_UPDATES_ENDPOINT = '/deviceManagement/windowsQualityUpdateProfiles';

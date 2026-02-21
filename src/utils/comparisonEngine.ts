@@ -56,31 +56,67 @@ export const GOLDEN_EXPEDITE_POLICY: Omit<WindowsQualityUpdateProfile, 'id'> = {
   expeditedUpdateSettings: {
     '@odata.type': 'microsoft.graph.expeditedWindowsQualityUpdateSettings',
     qualityUpdateRelease: '02/10/2026 - 2026.02 B',
-    daysUntilForcedReboot: 1,
+    daysUntilForcedReboot: 2,
   },
 };
+
+/**
+ * Creates a golden expedite policy with the specified quality update release.
+ * This allows dynamic selection of the newest available quality update.
+ */
+export function createGoldenExpeditePolicy(qualityUpdateRelease: string): Omit<WindowsQualityUpdateProfile, 'id'> {
+  return {
+    '@odata.type': '#microsoft.graph.windowsQualityUpdateProfile',
+    displayName: 'default_aad_kunde_win-expedite',
+    description: 'Emergency hotpatch expedite',
+    expeditedUpdateSettings: {
+      '@odata.type': 'microsoft.graph.expeditedWindowsQualityUpdateSettings',
+      qualityUpdateRelease,
+      daysUntilForcedReboot: 2,
+    },
+  };
+}
+
+/**
+ * Extracts the newest quality update release from existing expedite policies.
+ * Parses the release date from the format "MM/DD/YYYY - YYYY.MM B" and returns the newest one.
+ * Returns undefined if no valid releases are found.
+ */
+export function extractNewestQualityUpdateRelease(
+  policies: WindowsQualityUpdateProfile[]
+): string | undefined {
+  if (policies.length === 0) return undefined;
+
+  const releases = policies
+    .filter((p) => p.expeditedUpdateSettings?.qualityUpdateRelease)
+    .map((p) => p.expeditedUpdateSettings!.qualityUpdateRelease);
+
+  if (releases.length === 0) return undefined;
+
+  // Parse dates from format "MM/DD/YYYY - YYYY.MM B" and sort by date
+  const parsedReleases = releases.map((release) => {
+    const dateMatch = release.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (dateMatch) {
+      const [, month, day, year] = dateMatch;
+      return {
+        release,
+        date: new Date(`${year}-${month}-${day}`),
+      };
+    }
+    return { release, date: new Date(0) }; // fallback for unrecognized format
+  });
+
+  // Sort by date descending and return the newest
+  parsedReleases.sort((a, b) => b.date.getTime() - a.date.getTime());
+  return parsedReleases[0]?.release;
+}
 
 export const GOLDEN_QUALITY_UPDATE_POLICY: Omit<WindowsQualityUpdatePolicy, 'id'> = {
   '@odata.type': '#microsoft.graph.windowsQualityUpdatePolicy',
   displayName: 'default_aad_kunde_win-quality',
   description: 'Standardized Windows Quality Update Policy via InTuneUp',
   hotpatchEnabled: true,
-  approvalSettings: [
-    {
-      '@odata.type': 'microsoft.graph.windowsQualityUpdateApprovalSetting',
-      windowsQualityUpdateCadence: 'monthly',
-      windowsQualityUpdateCategory: 'security',
-      approvalMethodType: 'automatic',
-      deferredDeploymentInDay: 0,
-    },
-    {
-      '@odata.type': 'microsoft.graph.windowsQualityUpdateApprovalSetting',
-      windowsQualityUpdateCadence: 'outOfBand',
-      windowsQualityUpdateCategory: 'security',
-      approvalMethodType: 'automatic',
-      deferredDeploymentInDay: 0,
-    },
-  ],
+  approvalSettings: [],
 };
 
 // ============================================================
@@ -94,7 +130,6 @@ export const GOLDEN_QUALITY_UPDATE_POLICY: Omit<WindowsQualityUpdatePolicy, 'id'
  * - id: read-only identifier
  * - displayName: customer-specific, not a compliance field
  * - description: informational only, not a compliance setting
- * - expeditedUpdateSettings: complex nested object — polymorphic type requires special PATCH handling
  */
 const EXCLUDED_FROM_COMPARISON = new Set<string>([
   '@odata.type',
@@ -102,7 +137,7 @@ const EXCLUDED_FROM_COMPARISON = new Set<string>([
   'displayName',
   'description',
   'installationSchedule',      // compared via compareInstallationSchedule() sub-field helper instead
-  'expeditedUpdateSettings',   // nested object — requires special PATCH handling
+  'expeditedUpdateSettings',   // compared via compareExpeditedUpdateSettings() sub-field helper instead
 ]);
 
 // ============================================================
@@ -220,6 +255,41 @@ function compareInstallationSchedule(
 }
 
 // ============================================================
+// expeditedUpdateSettings sub-field comparison
+// ============================================================
+
+/**
+ * Compares the expeditedUpdateSettings fields individually.
+ * - qualityUpdateRelease: expected to be the newest available quality update
+ * - daysUntilForcedReboot: expected to be 2 days
+ * These fields are patchable.
+ */
+function compareExpeditedUpdateSettings(
+  actual: WindowsQualityUpdateProfile,
+  goldenPolicy: Omit<WindowsQualityUpdateProfile, 'id'>
+): FieldComparisonResult[] {
+  const goldenSettings = goldenPolicy.expeditedUpdateSettings;
+  const actualSettings = actual.expeditedUpdateSettings;
+
+  return [
+    {
+      field: 'expeditedUpdateSettings.qualityUpdateRelease',
+      expected: goldenSettings?.qualityUpdateRelease,
+      actual: actualSettings?.qualityUpdateRelease,
+      isMatch: deepEqual(goldenSettings?.qualityUpdateRelease, actualSettings?.qualityUpdateRelease),
+      isPatchable: true,
+    },
+    {
+      field: 'expeditedUpdateSettings.daysUntilForcedReboot',
+      expected: goldenSettings?.daysUntilForcedReboot,
+      actual: actualSettings?.daysUntilForcedReboot,
+      isMatch: deepEqual(goldenSettings?.daysUntilForcedReboot, actualSettings?.daysUntilForcedReboot),
+      isPatchable: true,
+    },
+  ];
+}
+
+// ============================================================
 // Public API
 // ============================================================
 
@@ -275,22 +345,34 @@ export function compareFeatureUpdates(
 
 /**
  * Compares all fetched Expedite/Quality Update profiles against the Golden Standard.
+ * If newestQualityUpdate is provided, uses that for the gold standard instead of the hardcoded value.
+ * expeditedUpdateSettings sub-fields are compared individually and are patchable.
  */
 export function compareExpeditePolicies(
-  policies: WindowsQualityUpdateProfile[]
+  policies: WindowsQualityUpdateProfile[],
+  newestQualityUpdate?: string
 ): PolicyComparisonResult[] {
+  // Use dynamic quality update if provided, otherwise fall back to hardcoded
+  const goldenPolicy = newestQualityUpdate
+    ? createGoldenExpeditePolicy(newestQualityUpdate)
+    : GOLDEN_EXPEDITE_POLICY;
+
   return policies.map((policy) => {
     const fields = compareAgainstGolden(
       policy as unknown as Record<string, unknown>,
-      GOLDEN_EXPEDITE_POLICY as Record<string, unknown>
+      goldenPolicy as Record<string, unknown>
     );
+
+    // Add expeditedUpdateSettings sub-field comparisons
+    const expediteFields = compareExpeditedUpdateSettings(policy, goldenPolicy);
+    const allFields = [...fields, ...expediteFields];
 
     return {
       policyId: policy.id ?? 'unknown',
       policyName: policy.displayName,
       policyType: 'expeditePolicy' as const,
-      fields,
-      isFullyCompliant: fields.every((f) => f.isMatch),
+      fields: allFields,
+      isFullyCompliant: allFields.every((f) => f.isMatch),
     };
   });
 }

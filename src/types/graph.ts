@@ -88,7 +88,7 @@ export interface WindowsFeatureUpdateProfile {
 }
 
 // ============================================================
-// Expedite / Quality Update Profile (windowsQualityUpdateProfile)
+// Expedite Update Profile (windowsQualityUpdateProfile)
 // ============================================================
 
 export interface ExpeditedWindowsQualityUpdateSettings {
@@ -123,7 +123,7 @@ export interface WindowsQualityUpdatePolicy {
   displayName: string;
   description: string;
   hotpatchEnabled: boolean;
-  approvalSettings: WindowsQualityUpdateApprovalSetting[];
+  approvalSettings?: WindowsQualityUpdateApprovalSetting[];
 }
 
 // ============================================================

@@ -8,6 +8,8 @@ import {
   compareFeatureUpdates,
   compareExpeditePolicies,
   compareQualityUpdatePolicies,
+  extractNewestQualityUpdateRelease,
+  createGoldenExpeditePolicy,
   GOLDEN_UPDATE_RING,
   GOLDEN_FEATURE_UPDATE,
   GOLDEN_EXPEDITE_POLICY,
@@ -106,9 +108,10 @@ interface PolicyCardProps {
   result: PolicyComparisonResult;
   onFixDeviation: (result: PolicyComparisonResult) => void;
   isFixing: boolean;
+  showFixButton: boolean;
 }
 
-function PolicyCard({ result, onFixDeviation, isFixing }: PolicyCardProps): React.JSX.Element {
+function PolicyCard({ result, onFixDeviation, isFixing, showFixButton }: PolicyCardProps): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const deviationCount = result.fields.filter((f) => !f.isMatch).length;
 
@@ -160,7 +163,12 @@ function PolicyCard({ result, onFixDeviation, isFixing }: PolicyCardProps): Reac
                 ⚠ Some deviations require manual fix in Intune portal
               </p>
             )}
-            {result.fields.some((f) => !f.isMatch && f.isPatchable) && (
+            {!showFixButton && result.fields.some((f) => !f.isMatch) && (
+              <p className="text-xs text-blue-400">
+                ℹ️ Graph API does not support modifying this policy type. Create a new policy instead.
+              </p>
+            )}
+            {showFixButton && result.fields.some((f) => !f.isMatch && f.isPatchable) && (
               <Button
                 size="sm"
                 onClick={() => onFixDeviation(result)}
@@ -189,6 +197,7 @@ interface PolicySectionProps {
   fixingId: string | null;
   onDeploy: () => void;
   isDeploying: boolean;
+  showFixButton: boolean;
 }
 
 function PolicySection({
@@ -198,6 +207,7 @@ function PolicySection({
   fixingId,
   onDeploy,
   isDeploying,
+  showFixButton,
 }: PolicySectionProps): React.JSX.Element {
   const compliantCount = results.filter((r) => r.isFullyCompliant).length;
 
@@ -239,6 +249,7 @@ function PolicySection({
               result={result}
               onFixDeviation={onFixDeviation}
               isFixing={fixingId === result.policyId}
+              showFixButton={showFixButton}
             />
           ))}
         </div>
@@ -362,7 +373,10 @@ export function Dashboard(): React.JSX.Element {
   const updateRingResults = compareUpdateRings(updateRings);
   const featureUpdateResults = compareFeatureUpdates(featureUpdates);
   const qualityUpdateResults = compareQualityUpdatePolicies(qualityUpdatePolicies);
-  const expediteResults = compareExpeditePolicies(expeditePolicies);
+
+  // Extract the newest quality update from existing expedite policies for dynamic gold standard
+  const newestQualityUpdate = extractNewestQualityUpdateRelease(expeditePolicies);
+  const expediteResults = compareExpeditePolicies(expeditePolicies, newestQualityUpdate);
 
   const totalPolicies =
     updateRingResults.length + featureUpdateResults.length + qualityUpdateResults.length + expediteResults.length;
@@ -448,8 +462,12 @@ export function Dashboard(): React.JSX.Element {
           displayName: `default_aad_${kundeName}_win-feature`,
         });
       } else if (policyType === 'expeditePolicy') {
+        // Use dynamic quality update if available, otherwise fall back to hardcoded
+        const goldenExpedite = newestQualityUpdate
+          ? createGoldenExpeditePolicy(newestQualityUpdate)
+          : GOLDEN_EXPEDITE_POLICY;
         await createQualityUpdateProfile({
-          ...GOLDEN_EXPEDITE_POLICY,
+          ...goldenExpedite,
           displayName: `default_aad_${kundeName}_win-expedite`,
         });
       } else {
@@ -583,6 +601,7 @@ export function Dashboard(): React.JSX.Element {
           fixingId={fixingId}
           onDeploy={() => setDeployDialog({ open: true, policyType: 'updateRing' })}
           isDeploying={deployMutation.isPending && deployDialog.policyType === 'updateRing'}
+          showFixButton={true}
         />
 
         <PolicySection
@@ -592,6 +611,7 @@ export function Dashboard(): React.JSX.Element {
           fixingId={fixingId}
           onDeploy={() => setDeployDialog({ open: true, policyType: 'featureUpdate' })}
           isDeploying={deployMutation.isPending && deployDialog.policyType === 'featureUpdate'}
+          showFixButton={false}
         />
 
         <PolicySection
@@ -601,15 +621,17 @@ export function Dashboard(): React.JSX.Element {
           fixingId={fixingId}
           onDeploy={() => setDeployDialog({ open: true, policyType: 'qualityUpdatePolicy' })}
           isDeploying={deployMutation.isPending && deployDialog.policyType === 'qualityUpdatePolicy'}
+          showFixButton={false}
         />
 
         <PolicySection
-          title="Expedite / Quality Update Profiles"
+          title="Expedite Update Profiles"
           results={expediteResults}
           onFixDeviation={handleFixDeviation}
           fixingId={fixingId}
           onDeploy={() => setDeployDialog({ open: true, policyType: 'expeditePolicy' })}
           isDeploying={deployMutation.isPending && deployDialog.policyType === 'expeditePolicy'}
+          showFixButton={false}
         />
       </main>
 
