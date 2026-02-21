@@ -2,7 +2,7 @@
 
 # InTuneUp
 
-<img src="public/logo.svg" alt="Logo" width="64" height="64" style="display:block; margin: 0 auto;" />
+<img src="public/logo.svg" alt="Logo" width="128" height="128" style="display:block; margin: 0 auto;" />
 
 <p>Version 1.0.0</p>
 
