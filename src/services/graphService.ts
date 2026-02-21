@@ -7,9 +7,11 @@ import type {
   WindowsQualityUpdatePolicy,
   FeatureUpdateCatalogEntry,
   QualityUpdateCatalogEntry,
+  Organization,
 } from '../types/graph';
 
 const GRAPH_BASE_URL = 'https://graph.microsoft.com/beta';
+const GRAPH_V1_BASE_URL = 'https://graph.microsoft.com/v1.0';
 
 // ============================================================
 // Token Acquisition
@@ -77,6 +79,17 @@ async function graphGet<T>(endpoint: string): Promise<T> {
   const result = await handleResponse<T>(response);
   // Temporary debug logging — useful for validating raw API field values
   console.log(`[GraphService] GET ${endpoint} response:`, JSON.stringify(result, null, 2));
+  return result;
+}
+
+async function graphGetV1<T>(endpoint: string): Promise<T> {
+  const headers = await buildHeaders();
+  const response = await fetch(`${GRAPH_V1_BASE_URL}${endpoint}`, {
+    method: 'GET',
+    headers,
+  });
+  const result = await handleResponse<T>(response);
+  console.log(`[GraphService] GET v1.0${endpoint} response:`, JSON.stringify(result, null, 2));
   return result;
 }
 
@@ -280,6 +293,25 @@ export async function getLatestQualityUpdateRelease(): Promise<string | null> {
     return response.value[0]?.releaseDateTime ?? null;
   } catch (error) {
     console.error('[GraphService] Failed to fetch quality update catalog:', error);
+    return null;
+  }
+}
+
+// ============================================================
+// Organization (tenant info)
+// ============================================================
+
+/**
+ * Fetches the tenant's friendly display name from the organization endpoint.
+ * Uses the v1.0 API since this is a stable, non-beta resource.
+ * Returns null if the API call fails (permission not granted, network error, etc.)
+ */
+export async function getOrganization(): Promise<string | null> {
+  try {
+    const response = await graphGetV1<ODataListResponse<Organization>>('/organization');
+    return response.value[0]?.displayName ?? null;
+  } catch (error) {
+    console.error('[GraphService] Failed to fetch organization:', error);
     return null;
   }
 }

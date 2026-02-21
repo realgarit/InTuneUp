@@ -29,6 +29,7 @@ import type { PolicyComparisonResult, FieldComparisonResult } from '../types/gra
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Header } from './Header';
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  LogOut,
   Plus,
   Wrench,
   Loader2,
@@ -576,40 +576,13 @@ export function Dashboard(): React.JSX.Element {
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-white">InTuneUp</h1>
-            <p className="text-xs text-slate-400">Windows Update Policy Manager</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:block text-right">
-              <p className="text-sm text-white">{userName}</p>
-              <p className="text-xs text-slate-400">
-                {compliantPolicies}/{totalPolicies} policies compliant
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={refetchAll}
-              className="text-slate-400 hover:text-white"
-              title="Refresh all policies"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSignOut}
-              className="text-slate-400 hover:text-white"
-            >
-              <LogOut className="h-4 w-4 mr-1" />
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Header
+        userName={userName}
+        compliantPolicies={compliantPolicies}
+        totalPolicies={totalPolicies}
+        onSignOut={handleSignOut}
+        onRefresh={refetchAll}
+      />
 
       {/* Summary Bar */}
       <div className="bg-slate-900 border-b border-slate-800">

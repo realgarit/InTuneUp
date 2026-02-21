@@ -3,7 +3,7 @@ import { useMsal } from '@azure/msal-react';
 import { loginRequest } from '../services/authConfig';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { ShieldCheck } from 'lucide-react';
+import { Logo } from './ui/Logo';
 
 export function Login(): React.JSX.Element {
   const { instance } = useMsal();
@@ -17,8 +17,8 @@ export function Login(): React.JSX.Element {
       <Card className="w-full max-w-md bg-slate-900 border-slate-700 text-white">
         <CardHeader className="text-center space-y-4">
           <div className="flex justify-center">
-            <div className="p-4 bg-blue-600 rounded-full">
-              <ShieldCheck className="h-10 w-10 text-white" />
+            <div className="bg-blue-600 p-3 rounded-xl text-white">
+              <Logo className="h-20 w-20" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold text-white">InTuneUp</CardTitle>

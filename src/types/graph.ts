@@ -176,6 +176,15 @@ export interface UpdateVersionInfo {
 }
 
 // ============================================================
+// Organization (tenant info)
+// ============================================================
+
+export interface Organization {
+  id: string;
+  displayName: string;
+}
+
+// ============================================================
 // Union type for all policy types
 // ============================================================
 
