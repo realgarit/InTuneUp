@@ -9,7 +9,7 @@ import type {
 } from '../types/graph';
 
 // ============================================================
-// Golden Standard Definitions (from DESIGN.md)
+// Golden Standard Definitions
 // ============================================================
 
 export const GOLDEN_UPDATE_RING: Omit<WindowsUpdateForBusinessConfiguration, 'id'> = {
@@ -40,31 +40,34 @@ export const GOLDEN_UPDATE_RING: Omit<WindowsUpdateForBusinessConfiguration, 'id
   postponeRebootUntilAfterDeadline: false,
 };
 
-export const GOLDEN_FEATURE_UPDATE: Omit<WindowsFeatureUpdateProfile, 'id'> = {
-  '@odata.type': '#microsoft.graph.windowsFeatureUpdateProfile',
-  displayName: 'default_aad_kunde_win-feature',
-  description: 'No Description',
-  featureUpdateVersion: 'Windows 11, version 25H2',
-  installFeatureUpdatesOptional: false,
-  installLatestWindows10OnWindows11IneligibleDevice: false,
-};
-
-export const GOLDEN_EXPEDITE_POLICY: Omit<WindowsQualityUpdateProfile, 'id'> = {
-  '@odata.type': '#microsoft.graph.windowsQualityUpdateProfile',
-  displayName: 'default_aad_kunde_win-expedite',
-  description: 'Emergency hotpatch expedite',
-  expeditedUpdateSettings: {
-    '@odata.type': 'microsoft.graph.expeditedWindowsQualityUpdateSettings',
-    qualityUpdateRelease: '02/10/2026 - 2026.02 B',
-    daysUntilForcedReboot: 2,
-  },
-};
+/**
+ * Creates a golden feature update profile with the specified version.
+ * This allows dynamic selection of the latest available feature update.
+ * @throws Error if featureUpdateVersion is null, undefined, or empty
+ */
+export function createGoldenFeatureUpdate(featureUpdateVersion: string | null | undefined): Omit<WindowsFeatureUpdateProfile, 'id'> {
+  if (!featureUpdateVersion) {
+    throw new Error('Feature update version is required but not available from API');
+  }
+  return {
+    '@odata.type': '#microsoft.graph.windowsFeatureUpdateProfile',
+    displayName: 'default_aad_kunde_win-feature',
+    description: 'No Description',
+    featureUpdateVersion,
+    installFeatureUpdatesOptional: false,
+    installLatestWindows10OnWindows11IneligibleDevice: false,
+  };
+}
 
 /**
  * Creates a golden expedite policy with the specified quality update release.
  * This allows dynamic selection of the newest available quality update.
+ * @throws Error if qualityUpdateRelease is null, undefined, or empty
  */
-export function createGoldenExpeditePolicy(qualityUpdateRelease: string): Omit<WindowsQualityUpdateProfile, 'id'> {
+export function createGoldenExpeditePolicy(qualityUpdateRelease: string | null | undefined): Omit<WindowsQualityUpdateProfile, 'id'> {
+  if (!qualityUpdateRelease) {
+    throw new Error('Quality update release is required but not available from API');
+  }
   return {
     '@odata.type': '#microsoft.graph.windowsQualityUpdateProfile',
     displayName: 'default_aad_kunde_win-expedite',
@@ -79,7 +82,7 @@ export function createGoldenExpeditePolicy(qualityUpdateRelease: string): Omit<W
 
 /**
  * Extracts the newest quality update release from existing expedite policies.
- * Parses the release date from the format "MM/DD/YYYY - YYYY.MM B" and returns the newest one.
+ * Parses the release date from ISO format "YYYY-MM-DDTHH:MM:SSZ" and returns the newest one.
  * Returns undefined if no valid releases are found.
  */
 export function extractNewestQualityUpdateRelease(
@@ -93,8 +96,14 @@ export function extractNewestQualityUpdateRelease(
 
   if (releases.length === 0) return undefined;
 
-  // Parse dates from format "MM/DD/YYYY - YYYY.MM B" and sort by date
+  // Parse dates from ISO format "YYYY-MM-DDTHH:MM:SSZ" and sort by date
   const parsedReleases = releases.map((release) => {
+    // Try ISO format first (e.g., "2026-01-13T00:00:00Z")
+    const isoDate = new Date(release);
+    if (!isNaN(isoDate.getTime())) {
+      return { release, date: isoDate };
+    }
+    // Fallback: try legacy format "MM/DD/YYYY - YYYY.MM B"
     const dateMatch = release.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
     if (dateMatch) {
       const [, month, day, year] = dateMatch;
@@ -323,14 +332,24 @@ export function compareUpdateRings(
 
 /**
  * Compares all fetched Feature Update profiles against the Golden Standard.
+ * If featureUpdateVersion is provided, uses that for the gold standard.
+ * Throws error if featureUpdateVersion is null (API should have returned a value).
  */
 export function compareFeatureUpdates(
-  policies: WindowsFeatureUpdateProfile[]
+  policies: WindowsFeatureUpdateProfile[],
+  featureUpdateVersion: string | null | undefined
 ): PolicyComparisonResult[] {
+  // If no version is available (API failed), throw error - no fallback
+  if (!featureUpdateVersion) {
+    throw new Error('Feature update version not available. Please ensure the Graph API is returning data.');
+  }
+
+  const goldenProfile = createGoldenFeatureUpdate(featureUpdateVersion);
+
   return policies.map((policy) => {
     const fields = compareAgainstGolden(
       policy as unknown as Record<string, unknown>,
-      GOLDEN_FEATURE_UPDATE as Record<string, unknown>
+      goldenProfile as Record<string, unknown>
     );
 
     return {
@@ -345,17 +364,20 @@ export function compareFeatureUpdates(
 
 /**
  * Compares all fetched Expedite/Quality Update profiles against the Golden Standard.
- * If newestQualityUpdate is provided, uses that for the gold standard instead of the hardcoded value.
+ * If newestQualityUpdate is provided, uses that for the gold standard.
+ * Throws error if newestQualityUpdate is null (API should have returned a value).
  * expeditedUpdateSettings sub-fields are compared individually and are patchable.
  */
 export function compareExpeditePolicies(
   policies: WindowsQualityUpdateProfile[],
-  newestQualityUpdate?: string
+  newestQualityUpdate: string | null | undefined
 ): PolicyComparisonResult[] {
-  // Use dynamic quality update if provided, otherwise fall back to hardcoded
-  const goldenPolicy = newestQualityUpdate
-    ? createGoldenExpeditePolicy(newestQualityUpdate)
-    : GOLDEN_EXPEDITE_POLICY;
+  // If no version is available (API failed), throw error - no fallback
+  if (!newestQualityUpdate) {
+    throw new Error('Quality update release not available. Please ensure the Graph API is returning data.');
+  }
+
+  const goldenPolicy = createGoldenExpeditePolicy(newestQualityUpdate);
 
   return policies.map((policy) => {
     const fields = compareAgainstGolden(

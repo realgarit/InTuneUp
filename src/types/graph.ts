@@ -127,6 +127,55 @@ export interface WindowsQualityUpdatePolicy {
 }
 
 // ============================================================
+// Windows Autopatch Catalog Types
+// ============================================================
+
+/** Base type for catalog entries from Windows Autopatch */
+export interface CatalogEntry {
+  id: string;
+  displayName: string;
+  releaseDateTime: string;
+  deployableUntilDateTime?: string | null;
+}
+
+/** Feature update catalog entry from Windows Autopatch */
+export interface FeatureUpdateCatalogEntry extends CatalogEntry {
+  '@odata.type': '#microsoft.graph.windowsUpdates.featureUpdateCatalogEntry';
+  version: string;
+}
+
+/** Quality update catalog entry from Windows Autopatch */
+export interface QualityUpdateCatalogEntry extends CatalogEntry {
+  '@odata.type': '#microsoft.graph.windowsUpdates.qualityUpdateCatalogEntry';
+  shortName: string;
+  isExpeditable: boolean;
+  qualityUpdateClassification: 'security' | 'nonSecurity';
+}
+
+/** Union type for catalog entries */
+export type CatalogEntryType = FeatureUpdateCatalogEntry | QualityUpdateCatalogEntry;
+
+/** Response type for catalog entries API */
+export interface CatalogEntriesResponse {
+  '@odata.context'?: string;
+  value: CatalogEntryType[];
+}
+
+/** Update version info returned by useUpdateVersions hook */
+export interface UpdateVersionInfo {
+  /** Feature update version from API, null if API fails */
+  featureUpdateVersion: string | null;
+  /** Quality update release from API, null if API fails */
+  qualityUpdateRelease: string | null;
+  /** Whether either version is currently loading */
+  isLoading: boolean;
+  /** Whether either version failed to load */
+  isError: boolean;
+  /** Function to refetch both versions */
+  refetch: () => void;
+}
+
+// ============================================================
 // Union type for all policy types
 // ============================================================
 

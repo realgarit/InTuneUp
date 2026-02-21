@@ -5,12 +5,14 @@ import type {
   WindowsFeatureUpdateProfile,
   WindowsQualityUpdateProfile,
   WindowsQualityUpdatePolicy,
+  FeatureUpdateCatalogEntry,
+  QualityUpdateCatalogEntry,
 } from '../types/graph';
 
 const GRAPH_BASE_URL = 'https://graph.microsoft.com/beta';
 
 // ============================================================
-// Token Acquisition (DRY — used by all API methods)
+// Token Acquisition
 // ============================================================
 
 async function acquireToken(): Promise<string> {
@@ -239,4 +241,45 @@ export async function patchQualityUpdatePolicy(
     ...payload,
   };
   return graphPatch<WindowsQualityUpdatePolicy>(QUALITY_UPDATE_POLICY_BY_ID(id), patchPayload);
+}
+
+// ============================================================
+// Windows Autopatch Catalog - Update Version Discovery
+// ============================================================
+
+const CATALOG_ENDPOINT = '/admin/windows/updates/catalog/entries';
+
+/**
+ * Fetches the latest feature update version from the Windows Autopatch catalog.
+ * Returns null if the API call fails (permission not granted, network error, etc.)
+ */
+export async function getLatestFeatureUpdateVersion(): Promise<string | null> {
+  try {
+    const response = await graphGet<ODataListResponse<FeatureUpdateCatalogEntry>>(
+      `${CATALOG_ENDPOINT}?$filter=isof('microsoft.graph.windowsUpdates.featureUpdateCatalogEntry')&$orderby=releaseDateTime desc&$top=1`
+    );
+    return response.value[0]?.version ?? null;
+  } catch (error) {
+    console.error('[GraphService] Failed to fetch feature update catalog:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetches the latest expeditable quality update release from the Windows Autopatch catalog.
+ * Returns null if the API call fails (permission not granted, network error, etc.)
+ */
+export async function getLatestQualityUpdateRelease(): Promise<string | null> {
+  try {
+    // Use the full type path for isExpeditable filter as required by OData
+    // See: https://learn.microsoft.com/graph/windowsupdates-deploy-expedited-update
+    const response = await graphGet<ODataListResponse<QualityUpdateCatalogEntry>>(
+      `${CATALOG_ENDPOINT}?$filter=isof('microsoft.graph.windowsUpdates.qualityUpdateCatalogEntry') and microsoft.graph.windowsUpdates.qualityUpdateCatalogEntry/isExpeditable eq true&$orderby=releaseDateTime desc&$top=1`
+    );
+    // Return releaseDateTime (ISO format) to match what policies store in qualityUpdateRelease
+    return response.value[0]?.releaseDateTime ?? null;
+  } catch (error) {
+    console.error('[GraphService] Failed to fetch quality update catalog:', error);
+    return null;
+  }
 }

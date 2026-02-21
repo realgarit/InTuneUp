@@ -40,8 +40,9 @@ export const msalInstance = new PublicClientApplication(msalConfig);
 export const GRAPH_SCOPES = {
   deviceManagement: 'DeviceManagementConfiguration.ReadWrite.All',
   userRead: 'User.Read',
+  windowsUpdates: 'WindowsUpdates.ReadWrite.All',
 } as const;
 
 export const loginRequest = {
-  scopes: [GRAPH_SCOPES.deviceManagement, GRAPH_SCOPES.userRead],
+  scopes: [GRAPH_SCOPES.deviceManagement, GRAPH_SCOPES.userRead, GRAPH_SCOPES.windowsUpdates],
 };

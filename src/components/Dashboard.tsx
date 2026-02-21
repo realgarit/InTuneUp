@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useIntunePolicies } from '../hooks/useIntunePolicies';
+import { useUpdateVersions } from '../hooks/useUpdateVersions';
 import {
   compareUpdateRings,
   compareFeatureUpdates,
@@ -10,9 +11,8 @@ import {
   compareQualityUpdatePolicies,
   extractNewestQualityUpdateRelease,
   createGoldenExpeditePolicy,
+  createGoldenFeatureUpdate,
   GOLDEN_UPDATE_RING,
-  GOLDEN_FEATURE_UPDATE,
-  GOLDEN_EXPEDITE_POLICY,
   GOLDEN_QUALITY_UPDATE_POLICY,
 } from '../utils/comparisonEngine';
 import {
@@ -360,6 +360,9 @@ export function Dashboard(): React.JSX.Element {
   const queryClient = useQueryClient();
   const { updateRings, featureUpdates, expeditePolicies, qualityUpdatePolicies, isLoading, isError, errors, refetchAll } =
     useIntunePolicies();
+  
+  // Fetch dynamic update versions from Windows Autopatch catalog
+  const { featureUpdateVersion, qualityUpdateRelease, isLoading: versionsLoading, isError: versionsError, refetch: refetchVersions } = useUpdateVersions();
 
   const [fixingId, setFixingId] = useState<string | null>(null);
   const [deployDialog, setDeployDialog] = useState<{
@@ -371,12 +374,18 @@ export function Dashboard(): React.JSX.Element {
 
   // ---- Comparison Results ----
   const updateRingResults = compareUpdateRings(updateRings);
-  const featureUpdateResults = compareFeatureUpdates(featureUpdates);
+  // Use dynamic feature update version from API - only compare when version is available
+  const featureUpdateResults = featureUpdateVersion
+    ? compareFeatureUpdates(featureUpdates, featureUpdateVersion)
+    : [];
   const qualityUpdateResults = compareQualityUpdatePolicies(qualityUpdatePolicies);
 
-  // Extract the newest quality update from existing expedite policies for dynamic gold standard
-  const newestQualityUpdate = extractNewestQualityUpdateRelease(expeditePolicies);
-  const expediteResults = compareExpeditePolicies(expeditePolicies, newestQualityUpdate);
+  // Use dynamic quality update release: API > existing policies > hardcoded default
+  // Only compare when a valid quality update release is available
+  const newestQualityUpdate = qualityUpdateRelease ?? extractNewestQualityUpdateRelease(expeditePolicies);
+  const expediteResults = newestQualityUpdate
+    ? compareExpeditePolicies(expeditePolicies, newestQualityUpdate)
+    : [];
 
   const totalPolicies =
     updateRingResults.length + featureUpdateResults.length + qualityUpdateResults.length + expediteResults.length;
@@ -457,15 +466,15 @@ export function Dashboard(): React.JSX.Element {
           displayName: `default_aad_${kundeName}_win-update`,
         });
       } else if (policyType === 'featureUpdate') {
+        // Use dynamic feature update version from API
+        const goldenFeature = createGoldenFeatureUpdate(featureUpdateVersion);
         await createFeatureUpdateProfile({
-          ...GOLDEN_FEATURE_UPDATE,
+          ...goldenFeature,
           displayName: `default_aad_${kundeName}_win-feature`,
         });
       } else if (policyType === 'expeditePolicy') {
-        // Use dynamic quality update if available, otherwise fall back to hardcoded
-        const goldenExpedite = newestQualityUpdate
-          ? createGoldenExpeditePolicy(newestQualityUpdate)
-          : GOLDEN_EXPEDITE_POLICY;
+        // Use dynamic quality update from API (with fallback chain)
+        const goldenExpedite = createGoldenExpeditePolicy(newestQualityUpdate);
         await createQualityUpdateProfile({
           ...goldenExpedite,
           displayName: `default_aad_${kundeName}_win-expedite`,
@@ -495,7 +504,7 @@ export function Dashboard(): React.JSX.Element {
   };
 
   // ---- Loading State ----
-  if (isLoading) {
+  if (isLoading || versionsLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -507,8 +516,14 @@ export function Dashboard(): React.JSX.Element {
   }
 
   // ---- Error State ----
-  if (isError) {
+  if (isError || versionsError) {
     const errorMessages = errors.filter(Boolean).map((e) => e?.message ?? 'Unknown error');
+    
+    // Add version-specific error if versions failed
+    if (versionsError) {
+      errorMessages.push('Failed to load update versions from Microsoft catalog');
+    }
+    
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
         <Card className="bg-slate-900 border-red-800 max-w-lg w-full">
@@ -521,9 +536,35 @@ export function Dashboard(): React.JSX.Element {
                 {msg}
               </p>
             ))}
-            <Button onClick={refetchAll} className="w-full bg-blue-600 hover:bg-blue-700">
+            <Button onClick={() => { refetchAll(); refetchVersions(); }} className="w-full bg-blue-600 hover:bg-blue-700">
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ---- Check if versions are available ----
+  // If versions failed to load or returned null, we can't safely run comparisons
+  if (!featureUpdateVersion || !qualityUpdateRelease) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <Card className="bg-slate-900 border-yellow-800 max-w-lg w-full">
+          <CardHeader>
+            <CardTitle className="text-yellow-400">Update Versions Not Available</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-slate-300">
+              The Microsoft Graph API did not return update version information. This is required for comparing feature update policies.
+            </p>
+            <p className="text-xs text-slate-500">
+              This may be a temporary issue with the Windows Autopatch service catalog.
+            </p>
+            <Button onClick={refetchVersions} className="w-full bg-blue-600 hover:bg-blue-700">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry Loading Versions
             </Button>
           </CardContent>
         </Card>
