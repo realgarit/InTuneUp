@@ -1,14 +1,18 @@
+<div align="center">
+
 # InTuneUp
 
 <img src="public/logo.svg" alt="Logo" width="64" height="64" style="display:block; margin: 0 auto;" />
 
-<p align="center">Version 1.0.0</p>
+<p>Version 1.0.0</p>
 
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org)
 [![Microsoft Intune](https://img.shields.io/badge/Microsoft-Intune-0078D4?style=flat&logo=microsoft)](https://learn.microsoft.com/en-us/mem/intune/)
 [![Azure](https://img.shields.io/badge/Azure-Static%20Web%20Apps-0078D4?style=flat&logo=microsoftazure)](https://azure.microsoft.com/services/app-service/static/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+</div>
 
 A React application that helps MSPs manage Microsoft Intune Windows Update configurations. Compare existing policies against your golden standard, fix deviations with one click, or deploy new standard policies to your Intune tenant.
 
