@@ -22,7 +22,7 @@ A React application that helps MSPs manage Microsoft Intune Windows Update confi
 
 ## Application Workflow
 
-![Application Workflow](ApplicationWorkFlowandStateManagement.png)
+![Application Workflow](docs/ApplicationWorkFlowandStateManagement.png)
 
 ## Supported Policy Types
 
@@ -97,8 +97,3 @@ src/
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
 - `npm run lint` - Run ESLint
-
-## License
-
-MIT
-
