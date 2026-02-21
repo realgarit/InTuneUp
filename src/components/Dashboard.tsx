@@ -356,7 +356,7 @@ function DeployDialog({
 // ============================================================
 
 export function Dashboard(): React.JSX.Element {
-  const { instance, accounts } = useMsal();
+  const { instance } = useMsal();
   const queryClient = useQueryClient();
   const { updateRings, featureUpdates, expeditePolicies, qualityUpdatePolicies, isLoading, isError, errors, refetchAll } =
     useIntunePolicies();
@@ -369,8 +369,6 @@ export function Dashboard(): React.JSX.Element {
     open: boolean;
     policyType: 'updateRing' | 'featureUpdate' | 'expeditePolicy' | 'qualityUpdatePolicy' | null;
   }>({ open: false, policyType: null });
-
-  const userName = accounts[0]?.name ?? accounts[0]?.username ?? 'User';
 
   // ---- Comparison Results ----
   const updateRingResults = compareUpdateRings(updateRings);
@@ -577,7 +575,6 @@ export function Dashboard(): React.JSX.Element {
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
       <Header
-        userName={userName}
         compliantPolicies={compliantPolicies}
         totalPolicies={totalPolicies}
         onSignOut={handleSignOut}

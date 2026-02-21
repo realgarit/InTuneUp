@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { Github } from 'lucide-react';
+import { useMsal } from '@azure/msal-react';
 import { Button } from './ui/button';
 import { Logo } from './ui/Logo';
+import { useTenantName } from '../hooks/useTenantName';
 
 interface HeaderProps {
-  userName: string;
   compliantPolicies: number;
   totalPolicies: number;
   onSignOut: () => void;
@@ -13,13 +14,18 @@ interface HeaderProps {
 }
 
 export function Header({
-  userName,
   compliantPolicies,
   totalPolicies,
   onSignOut,
   onRefresh,
   isRefreshing = false,
 }: HeaderProps): React.JSX.Element {
+  const { accounts } = useMsal();
+  const account = accounts[0];
+  const userName = account?.name ?? account?.username ?? 'User';
+  
+  // Fetch tenant name - only enabled when authenticated
+  const { data: tenantName, isLoading: isTenantLoading } = useTenantName(!!account);
   // Dynamic version display with fallback
   const version = import.meta.env.VITE_APP_VERSION || '1.0.0';
   const commitHash = import.meta.env.VITE_COMMIT_HASH || 'dev';
@@ -59,6 +65,11 @@ export function Header({
           {/* User info */}
           <div className="hidden sm:block text-right">
             <p className="text-sm text-white">{userName}</p>
+            {isTenantLoading ? (
+              <p className="text-xs text-muted-foreground">Loading tenant...</p>
+            ) : tenantName ? (
+              <p className="text-sm text-muted-foreground">{tenantName}</p>
+            ) : null}
             <p className="text-xs text-slate-400">
               {compliantPolicies}/{totalPolicies} policies compliant
             </p>
