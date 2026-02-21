@@ -38,10 +38,18 @@ export function Login(): React.JSX.Element {
             Sign in with Microsoft
           </Button>
           <p className="text-xs text-slate-500 text-center">
-            Requires{' '}
-            <code className="text-blue-400">DeviceManagementConfiguration.ReadWrite.All</code>{' '}
-            permission
+            Required permissions:
           </p>
+          <ul className="text-xs text-slate-400 space-y-1 list-none">
+            <li className="flex items-center justify-center gap-2">
+              <span className="text-blue-400">•</span>
+              <code className="text-blue-400">DeviceManagementConfiguration.ReadWrite.All</code>
+            </li>
+            <li className="flex items-center justify-center gap-2">
+              <span className="text-blue-400">•</span>
+              <code className="text-blue-400">WindowsUpdates.ReadWrite.All</code>
+            </li>
+          </ul>
         </CardContent>
       </Card>
     </div>
